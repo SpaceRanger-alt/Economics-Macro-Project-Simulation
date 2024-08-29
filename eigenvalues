@@ -1,0 +1,71 @@
+import numpy as np
+from scipy import optimize
+
+class Agent:
+    def __init__(self, initial_value, growth_rate, volatility):
+        self.value = initial_value
+        self.growth_rate = growth_rate
+        self.volatility = volatility
+
+    def update(self, dt):
+        self.value *= np.exp((self.growth_rate - 0.5 * self.volatility**2) * dt + 
+                             self.volatility * np.sqrt(dt) * np.random.normal())
+
+def advanced_economic_model(y, t, params, households, firms):
+    H, F, G, C, N_h, N_f, U, I, R, T, E, S = y
+    (alpha, beta, gamma, zeta, mu, delta, epsilon, lambdaa, kay, tau, pi, phi, omega, 
+     br, dr, ir, er, nfr, brr, sig_u, sig_i, sig_r, sig_t, rho, eta, theta, 
+     kappa, xi, psi, chi) = params
+
+    # Calculate total values
+    total_household_value = sum(h.value for h in households[:int(N_h)])
+    total_firm_value = sum(f.value for f in firms[:int(N_f)])
+
+    # Model equations
+    dHdt = (alpha*F/N_f) - (beta*H/N_h) + (gamma*G/N_h) + (zeta*C/N_h) + (mu*H*H) - (eta*U*H) + (theta*S*H)
+    dFdt = (delta*H*N_h/N_f) - (epsilon*F) + (lambdaa*F)*((1-F/N_f)/kay) - (kappa*I*F) + (xi*T)
+    dGdt = (tau*(H*N_h + F*N_f)) - (gamma*G) + pi*(np.sin(phi*t)) - (psi*E*G)
+    dCdt = (omega*(H*N_h + F*N_f - C)) - (chi*R*C)
+    dN_hdt = (br*N_h) - (dr*N_h) + ir - er
+    dN_fdt = (nfr*N_f) - (brr*N_f)
+    dUdt = sig_u * (N_h - (H + F)/N_f) - rho*U
+    dIdt = sig_i * (C/H - I)
+    dRdt = sig_r * (I - R)
+    dTdt = sig_t * (F - T)
+    dEdt = -0.01 * E + 0.001 * (H + F)
+    dSdt = 0.1 * (H + F) - 0.05 * S
+
+    return [dHdt, dFdt, dGdt, dCdt, dN_hdt, dN_fdt, dUdt, dIdt, dRdt, dTdt, dEdt, dSdt]
+
+# Initialize parameters and initial conditions
+params = [0.3, 0.4, 0.15, 0.2, 0.01, 0.3, 0.35, 0.5, 1.0, 0.2, 0.1, 0.1, 0.1,
+          0.01, 0.005, 100, 50, 0.02, 0.01, 0.1, 0.05, 0.03, 0.02, 0.2, 0.1, 0.05,
+          0.1, 0.05, 0.01, 0.1]
+
+y0 = [100000, 200000, 150000, 50000, 1000000, 200000, 0.05, 0.02, 0.03, 100, 100, 1000]
+
+# Initialize agents (simplified for eigenanalysis)
+households = [Agent(1000, 0.02, 0.1) for _ in range(int(y0[4]))]
+firms = [Agent(5000, 0.03, 0.15) for _ in range(int(y0[5]))]
+
+def equilibrium_residual(y):
+    return advanced_economic_model(y, 0, params, households, firms)
+
+y_eq = optimize.fsolve(equilibrium_residual, y0)
+
+from scipy.optimize import approx_fprime
+
+def jacobian(y):
+    return approx_fprime(y, lambda y: advanced_economic_model(y, 0, params, households, firms))
+
+J = jacobian(y_eq)
+
+eigenvalues, eigenvectors = np.linalg.eig(J)
+
+for i, (eigenvalue, eigenvector) in enumerate(zip(eigenvalues, eigenvectors.T)):
+    print(f"Mode {i+1}:")
+    print(f"  Eigenvalue: {eigenvalue}")
+    print("  Eigenvector:")
+    for j, var in enumerate(['H', 'F', 'G', 'C', 'N_h', 'N_f', 'U', 'I', 'R', 'T', 'E', 'S']):
+        print(f"    {var}: {eigenvector[j]}")
+    print()
